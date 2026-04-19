@@ -1,0 +1,36 @@
+/* --- 基礎背景與字體 --- */
+html, body, [data-testid="stAppViewContainer"] {
+    background-color: #0E1117;
+}
+
+/* --- 報告文字：純淨白色排版 --- */
+h1, h2, h3, p, li, span, strong {
+    color: #F5F5F5 !important;
+}
+
+h2, [data-testid="stMarkdownContainer"] h2 { 
+    font-size: 45px !important; 
+    border-left: 15px solid #FF3232 !important; 
+    padding-left: 20px !important;
+    font-weight: 900 !important;
+    line-height: 1.2 !important;
+}
+
+blockquote {
+    border-left: 15px solid #FF3232 !important;
+    background-color: rgba(255, 255, 255, 0.03) !important;
+    padding: 20px 30px !important;
+}
+
+blockquote p { font-size: 42px !important; font-weight: 900 !important; }
+p, li { font-size: 24px !important; line-height: 1.8 !important; }
+strong, b { font-size: 26px !important; font-weight: 800 !important; text-decoration: underline #FF3232 2px; }
+
+/* --- 數據指標區 (Metrics) --- */
+[data-testid="stMetricValue"] { font-size: 38px !important; font-weight: 700 !important; }
+[data-testid="stMetricLabel"] { font-size: 20px !important; }
+
+/* 🔴 關鍵修復：移除所有會鎖死 Delta 顏色的 CSS */
+[data-testid="stMetricDelta"] {
+    color: inherit !important;
+}

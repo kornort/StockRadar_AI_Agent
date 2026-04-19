@@ -1,0 +1,17 @@
+# 1. 忽略虛擬環境 (最佔空間的，絕對不要傳)
+venv/
+.venv/
+env/
+
+# 2. 忽略金鑰與設定檔 (安全性最高優先)
+.env
+config/*.json
+*.log
+
+# 3. 忽略數據檔案與生成的報告 (保持倉庫乾淨，GitHub 只放程式碼)
+data/*.csv
+notes/*.md
+__pycache__/
+
+# 4. 忽略 VS Code 個人設定
+.vscode/
