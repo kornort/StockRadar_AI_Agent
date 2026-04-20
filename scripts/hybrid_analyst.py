@@ -1,97 +1,151 @@
+
 import os
 import pandas as pd
 import requests
 from datetime import datetime
-import google.generativeai as genai
-from dotenv import load_dotenv
+import json
 
-load_dotenv()
-
-# --- 配置區 ---
-STOCK_INFO = {
-    "2330": {"name": "台積電", "industry": "半導體/矽光子核心"},
-    "3450": {"name": "聯鈞", "industry": "矽光子/光通訊"},
-    "3363": {"name": "上詮", "industry": "矽光子/先進封裝"},
-    "2317": {"name": "鴻海", "industry": "AI 伺服器/機器人/電動車"},
-    "2454": {"name": "聯發科", "industry": "邊緣 AI 晶片/手機晶片"},
-    "3491": {"name": "昇達科", "industry": "低軌衛星/通訊元件"},
-    "6285": {"name": "啟碁", "industry": "低軌衛星/網路設備"},
-    "1513": {"name": "中興電", "industry": "綠能/重電設備"},
-    "1519": {"name": "華城", "industry": "電力基建/變壓器"},
-    "1503": {"name": "士電", "industry": "重電/電力系統"}
-}
-
+# --- 本地模型 API ---
 def call_ollama(prompt):
+    """呼叫本地的 Ollama Gemma 模型""" 
     url = "http://localhost:11434/api/generate"
     payload = {
-        "model": "gemma4:e4b",
+        "model": "gemma4:e4b", # 使用您指定的模型
         "prompt": prompt,
         "stream": False,
-        "options": {"num_ctx": 4096}
+        "options": {"num_ctx": 8192} # 擴大上下文窗口以容納更豐富的 Prompt
     }
-    # 由於是批次處理，我們設定較長的超時
-    response = requests.post(url, json=payload, timeout=300)
-    return response.json().get('response', "")
+    try:
+        response = requests.post(url, json=payload, timeout=300)
+        response.raise_for_status() # 如果請求失敗，會拋出 HTTPError
+        return response.json().get('response', "(模型回傳為空)")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 呼叫 Ollama 模型失敗: {e}")
+        return f"(模型呼叫失敗: {e})"
 
-def main():
-    print(f"🚀 啟動全產業 AI 整合分析報告產製...")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+# --- 主要函式 1: 生成個股報告 (由 update_all_data.py 呼叫) ---
+def generate_single_stock_report(stock_id, stock_df, score, reasons, macro_report):
+    """
+    為單一股票生成深度分析報告，並儲存成獨立檔案。
+    """
+    print(f"✍️  正在為 {stock_id} 生成深度分析報告...")
     
-    # 這是你要求的單一檔名 (解決問題)
-    final_report_path = f"notes/{timestamp}_stock_report.md"
+    # 準備 Prompt
+    recent_data = stock_df.tail(10).to_string(index=True) # 提供最近10天的數據
+    score_reasons = ", ".join(reasons)
+
+    prompt = f"""
+    # 任務：專業台股分析師報告
+
+    ## 1. 分析標的
+    - **股票代號:** {stock_id}
+
+    ## 2. 宏觀背景 (由總經分析模組提供)
+    {macro_report}
+
+    ## 3. 量化數據
+    - **信心指數:** {score}/10
+    - **評分依據:** {score_reasons}
+    - **近期技術指標 (近10日):**
+    ```
+    {recent_data}
+    ```
+
+    ## 4. 你的任務
+    請基於以上所有資訊，以專業、客觀、精煉的法人報告風格，產出一份針對 {stock_id} 的單一個股深度分析報告。
+    報告必須使用 **繁體中文** 並以 **Markdown 格式** 呈現，包含以下部分：
+
+    ### A. 核心觀點 (Point of View)
+    - 綜合宏觀、產業、技術面與量化分數，用 2-3句話總結你對此股票的「核心看法」(例如：強烈看多、謹慎樂觀、建議避開等) 及主要理由。
+
+    ### B. 情境分析 (Scenario Analysis)
+    - **正面情境:** 分析在哪些「正面因素」下 (例如：財報優於預期、產業出現重大利多、技術面突破關鍵壓力)，股價可能上漲，並推估潛在目標價區間。
+    - **負面情境:** 分析在哪些「負面風險」下 (例如：國際政治衝突升溫、主要客戶抽單、跌破重要支撐)，股價可能下跌，並設定關鍵的停損或觀察價位。
+
+    ### C. 綜合評級與建議
+    - **評級:** 根據你的分析，給予「買進 (Buy)」、「持有 (Hold)」、「賣出 (Sell)」的明確評級。
+    - **操作策略:** 提供具體的下一步操作建議 (例如：若突破壓力區可追價、等待拉回支撐區再布局、若跌破應果斷停損等)。
+    """
+
+    # 呼叫 AI 並儲存
+    ai_analysis = call_ollama(prompt)
+    
+    # 建立儲存報告的資料夾
+    report_dir = f"reports/{datetime.now().strftime('%Y%m%d')}"
+    os.makedirs(report_dir, exist_ok=True)
+    
+    report_path = os.path.join(report_dir, f"{stock_id}.md")
+    
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(f"# {stock_id} 個股深度分析報告\n")
+        f.write(f"*報告時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n")
+        f.write(ai_analysis)
+        
+    print(f"✅ {stock_id} 報告已儲存至: {report_path}")
+
+# --- 主要函式 2: 生成市場總結 (直接執行此檔案時運行) ---
+def generate_summary_report():
+    """
+    讀取當天所有的個股報告，生成一份市場總結報告。
+    """
+    print(f"\n📑 正在生成今日市場總結報告...")
+    today_str = datetime.now().strftime('%Y%m%d')
+    report_dir = f"reports/{today_str}"
+
+    if not os.path.exists(report_dir) or not os.listdir(report_dir):
+        print(f"⚠️ 在 {report_dir} 中找不到任何個股報告，無法生成總結。")
+        return
+
+    # 讀取所有個股報告內容
+    all_reports_content = ""
+    for filename in os.listdir(report_dir):
+        if filename.endswith(".md"):
+            with open(os.path.join(report_dir, filename), 'r', encoding='utf-8') as f:
+                all_reports_content += f"\n\n---\n【檔案: {filename}】\n---\n"
+                all_reports_content += f.read()
+
+    # 建立總結 Prompt
+    summary_prompt = f"""
+    # 任務：市場分析總監的每日總結
+
+    ## 1. 背景
+    - 你是一位經驗豐富的證券公司分析總監。
+    - 以下是你團隊中多位分析師今天提交的「個股深度分析報告」。
+
+    ## 2. 原始報告內容
+    {all_reports_content}
+
+    ## 3. 你的任務
+    請閱讀並消化以上所有報告，然後以宏觀的視角，撰寫一份給高階主管的「今日市場盤後總結 (Daily Market Wrap-Up)」。
+    報告必須使用 **繁體中文** 並以 **Markdown 格式** 呈現，包含以下部分：
+
+    ### A. 市場多空溫度計
+    - 綜合所有報告的買進/賣出評級與核心觀點，判斷今天市場的整體氣氛是「偏多」、「中性」還是「偏空」，並說明理由。
+
+    ### B. 關鍵發現 (Key Findings)
+    - **共同的利多因素:** 點出報告中反覆出現的正面趨勢或訊號 (例如：多檔股票呈現黃金交叉、AI 伺服器產業鏈需求強勁等)。
+    - **潛在的系統性風險:** 識別報告中隱含的、可能影響多個板塊的共同風險 (例如：地緣政治緊張、通膨預期升溫等)。
+
+    ### C.明日操作焦點
+    - **重點關注板塊:** 建議明天應該優先關注哪個或哪些產業板塊。
+    - **明日策略提醒:** 提供一個簡潔的明日看盤重點與操作建議。
+    """
+
+    # 呼叫 AI 並儲存
+    summary_analysis = call_ollama(summary_prompt)
+    
+    summary_path = f"notes/Summary_Report_{today_str}.md"
     os.makedirs("notes", exist_ok=True)
-
-    # 先寫入報告標頭
-    with open(final_report_path, "w", encoding="utf-8") as f:
-        f.write(f"# 🌍 全球當紅產業 AI 投資整合報告\n")
-        f.write(f"產製時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"核心模型: Gemma 4 (NVIDIA GPU 1 加速)\n")
-        f.write(f"---\n\n")
-
-    for stock_id, info in STOCK_INFO.items():
-        stock_name = info["name"]
-        industry = info["industry"]
-        data_path = f"data/processed_{stock_id}.csv"
+    
+    with open(summary_path, "w", encoding="utf-8") as f:
+        f.write(f"# 每日市場盤後總結\n")
+        f.write(f"*總結時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n")
+        f.write(summary_analysis)
         
-        if not os.path.exists(data_path):
-            print(f"⚠️ 跳過 {stock_id}: 找不到資料。")
-            continue
-            
-        print(f"🔍 正在產製 {stock_name} 的深度分析...")
-        
-        try:
-            df = pd.read_csv(data_path)
-            recent_data = df.tail(8).to_string(index=False)
-            
-            prompt = f"""
-            你是一位專業的台股分析師。請分析『{stock_name} ({stock_id})』。
-            產業背景：{industry}。
-            
-            數據指標：
-            {recent_data}
-            
-            請產出 Markdown 格式報告，包含：
-            1. 技術面判讀。
-            2. 該產業目前的國際動能分析。
-            3. 明確的操作建議與風險控管。
-            使用繁體中文。
-            """
-            
-            # 呼叫 AI
-            ai_analysis = call_ollama(prompt)
-            
-            # 將結果附加 (Append) 到同一個檔案中
-            with open(final_report_path, "a", encoding="utf-8") as f:
-                f.write(f"## 【{industry}】{stock_name} ({stock_id})\n")
-                f.write(ai_analysis)
-                f.write("\n\n---\n\n")
-            
-            print(f"✅ {stock_name} 分析已寫入整合報告。")
-            
-        except Exception as e:
-            print(f"❌ {stock_name} 寫入失敗: {e}")
+    print(f"✨ 市場總結報告已成功生成: {summary_path}")
 
-    print(f"\n✨ 任務完成！整合報告已生成：{final_report_path}")
 
 if __name__ == "__main__":
-    main()
+    # 當這個檔案被直接執行時，代表所有個股報告都已生成完畢，
+    # 此時執行總結任務。
+    generate_summary_report()
