@@ -11,6 +11,7 @@ config/*.json
 # 3. 忽略數據檔案與生成的報告 (保持倉庫乾淨，GitHub 只放程式碼)
 data/*.csv
 notes/*.md
+reports/*.md
 __pycache__/
 
 # 4. 忽略 VS Code 個人設定
