@@ -27,6 +27,11 @@ def process_stock_data(stock_id):
             print(f"No data downloaded for {stock_id}. Skipping.")
             return None
 
+        # --- FIX for MultiIndex Error ---
+        # 檢查欄位是否為 MultiIndex，如果是則將其扁平化
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
         # 2. 計算 MA, RSI, MACD, Bollinger Bands, Volume SMA
         # 使用 pandas_ta 擴展功能，一次性計算多個指標
         df.ta.sma(length=5, append=True) # 會自動命名為 SMA_5

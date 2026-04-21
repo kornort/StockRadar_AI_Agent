@@ -2,5 +2,7 @@ streamlit==1.33.0
 pandas==2.2.2
 yfinance==0.2.37
 altair==5.3.0
-numpy==1.26.4
+plotly==5.20.0
+# 我們放開 numpy 和 pandas-ta 的版本限制，讓 pip 自動解決衝突
+numpy
 pandas-ta
