@@ -34,11 +34,15 @@ def generate_single_stock_report(stock_id, stock_df, score, reasons, macro_repor
     recent_data = stock_df.tail(10).to_string(index=True) # 提供最近10天的數據
     score_reasons = ", ".join(reasons)
 
+    today_date = datetime.now().strftime('%Y年%m月%d日')
     prompt = f"""
     # 任務：專業台股分析師報告
 
-    ## 1. 分析標的
-    - **股票代號:** {stock_id}
+    ## 1. 分析標的與時間
+    - **股票代號:** {stock_id} 
+      (⚠️ 強烈要求：必須正確寫出 {stock_id} 在台灣股市真實對應的公司名稱，嚴禁張冠李戴。例如 2330 必須是台積電，絕對不可寫成聯電或聯發科。)
+    - **今日日期:** {today_date} 
+      (⚠️ 強烈要求：報告中提及的分析時間必須以此日期為準，絕對不可編造未來的月份或年份。)
 
     ## 2. 宏觀背景 (由總經分析模組提供)
     {macro_report}
@@ -50,6 +54,7 @@ def generate_single_stock_report(stock_id, stock_df, score, reasons, macro_repor
     ```
     {recent_data}
     ```
+    (⚠️ 強烈要求：報告中所提及的目前股價、支撐壓力位及推估目標價，必須【嚴格基於上述提供的近期技術指標數據】來進行合理推算，絕對不可憑空捏造或出現偏離上述報價極大的幻覺價格。)
 
     ## 4. 你的任務
     請基於以上所有資訊，以專業、客觀、精煉的法人報告風格，產出一份針對 {stock_id} 的單一個股深度分析報告。
